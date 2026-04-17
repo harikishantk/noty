@@ -1,66 +1,48 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Plus, Folder, FileText, Trash2, ChevronRight, ChevronDown } from 'lucide-react';
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  type: 'note' | 'folder';
-  parentId: string | null;
-  children: string[];
-}
+import { useState } from 'react';
+import { Plus, Folder, FileText, Trash2, ChevronRight, ChevronDown, Star, Search } from 'lucide-react';
+import { NoteWithBlocks } from '@/app/types/blocks';
 
 interface SidebarProps {
-  notes: Record<string, Note>;
+  notes: Record<string, NoteWithBlocks>;
   selectedId: string | null;
   onSelectNote: (id: string) => void;
   onCreateNote: (parentId: string) => void;
   onCreateFolder: (parentId: string) => void;
   onDeleteNote: (id: string) => void;
   onRenameNote: (id: string, title: string) => void;
+  onStarNote: (id: string) => void;
+  onSearchOpen: () => void;
 }
 
 export default function Sidebar({
-  notes,
-  selectedId,
-  onSelectNote,
-  onCreateNote,
-  onCreateFolder,
-  onDeleteNote,
-  onRenameNote,
+  notes, selectedId, onSelectNote, onCreateNote, onCreateFolder,
+  onDeleteNote, onRenameNote, onStarNote, onSearchOpen,
 }: SidebarProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root']));
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
   const toggleFolder = (id: string) => {
-    const newExpanded = new Set(expandedFolders);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpandedFolders(newExpanded);
+    const s = new Set(expandedFolders);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setExpandedFolders(s);
   };
 
-  const startRename = (id: string, currentTitle: string) => {
+  const startRename = (id: string, title: string) => {
     setRenamingId(id);
-    setRenameValue(currentTitle);
+    setRenameValue(title);
   };
 
   const finishRename = (id: string) => {
-    if (renameValue.trim()) {
-      onRenameNote(id, renameValue.trim());
-    }
+    if (renameValue.trim()) onRenameNote(id, renameValue.trim());
     setRenamingId(null);
   };
 
-  const renderNoteItem = (id: string, depth: number = 0): React.ReactNode => {
+  const renderItem = (id: string, depth = 0): React.ReactNode => {
     const note = notes[id];
     if (!note) return null;
-
     const isFolder = note.type === 'folder';
     const isExpanded = expandedFolders.has(id);
     const isSelected = selectedId === id;
@@ -69,31 +51,20 @@ export default function Sidebar({
       <div key={id}>
         <div
           className={`note-item ${isSelected ? 'selected' : ''}`}
-          style={{ paddingLeft: `${depth * 12}px` }}
+          style={{ paddingLeft: `${depth * 14 + 8}px` }}
         >
-          {isFolder && (
-            <button
-              className="toggle-btn"
-              onClick={() => toggleFolder(id)}
-              title={isExpanded ? 'Collapse' : 'Expand'}
-            >
-              {isExpanded ? (
-                <ChevronDown size={16} />
-              ) : (
-                <ChevronRight size={16} />
-              )}
-            </button>
-          )}
-          {!isFolder && <div className="toggle-btn" />}
+          <button className="toggle-btn" onClick={() => isFolder && toggleFolder(id)}>
+            {isFolder
+              ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />)
+              : <span style={{ width: 14 }} />}
+          </button>
 
-          <button
-            className="note-button"
-            onClick={() => onSelectNote(id)}
-          >
-            {isFolder ? <Folder size={16} /> : <FileText size={16} />}
+          <button className="note-button" onClick={() => onSelectNote(id)}>
+            {isFolder
+              ? <Folder size={14} className="note-icon folder-icon" />
+              : <FileText size={14} className="note-icon" />}
             {renamingId === id ? (
               <input
-                type="text"
                 className="rename-input"
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
@@ -106,47 +77,41 @@ export default function Sidebar({
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-              <span>{note.title}</span>
+              <span className="note-title">{note.title}</span>
             )}
+            {note.starred && <Star size={11} className="star-badge" />}
           </button>
 
           <div className="note-actions">
-            <button
-              className="action-btn"
-              onClick={() => startRename(id, note.title)}
-              title="Rename"
-            >
+            {!isFolder && (
+              <button
+                className={`action-btn star-btn ${note.starred ? 'starred' : ''}`}
+                onClick={() => onStarNote(id)}
+                title={note.starred ? 'Unstar' : 'Star'}
+              >
+                <Star size={13} />
+              </button>
+            )}
+            <button className="action-btn" onClick={() => startRename(id, note.title)} title="Rename">
               ✎
             </button>
             {id !== 'root' && (
-              <button
-                className="action-btn delete-btn"
-                onClick={() => onDeleteNote(id)}
-                title="Delete"
-              >
-                <Trash2 size={14} />
+              <button className="action-btn delete-btn" onClick={() => onDeleteNote(id)} title="Delete">
+                <Trash2 size={13} />
               </button>
             )}
           </div>
         </div>
 
         {isFolder && isExpanded && (
-          <div className="folder-children">
-            {note.children.map((childId) => renderNoteItem(childId, depth + 1))}
-            <div className="folder-actions" style={{ paddingLeft: `${(depth + 1) * 12}px` }}>
-              <button
-                className="add-btn"
-                onClick={() => onCreateNote(id)}
-                title="Add note"
-              >
-                <Plus size={14} /> Note
+          <div>
+            {note.children.map((childId) => renderItem(childId, depth + 1))}
+            <div className="folder-actions" style={{ paddingLeft: `${(depth + 1) * 14 + 8}px` }}>
+              <button className="folder-add-btn" onClick={() => onCreateNote(id)}>
+                <Plus size={12} /> Note
               </button>
-              <button
-                className="add-btn"
-                onClick={() => onCreateFolder(id)}
-                title="Add folder"
-              >
-                <Plus size={14} /> Folder
+              <button className="folder-add-btn" onClick={() => onCreateFolder(id)}>
+                <Plus size={12} /> Folder
               </button>
             </div>
           </div>
@@ -155,30 +120,54 @@ export default function Sidebar({
     );
   };
 
+  const starredNotes = Object.values(notes).filter((n) => n.type === 'note' && n.starred);
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <h1>My Notes</h1>
+        <span className="sidebar-logo">noty</span>
       </div>
+
+      <button className="sidebar-search-btn" onClick={onSearchOpen}>
+        <Search size={14} />
+        <span>Search notes...</span>
+        <kbd>⌘K</kbd>
+      </button>
+
       <div className="sidebar-actions">
-        <button
-          className="add-btn"
-          onClick={() => onCreateNote('root')}
-          title="Add new note"
-        >
-          <Plus size={18} /> Note
+        <button className="add-btn" onClick={() => onCreateNote('root')}>
+          <Plus size={15} /> Note
         </button>
-        <button
-          className="add-btn"
-          onClick={() => onCreateFolder('root')}
-          title="Add new folder"
-        >
-          <Plus size={18} /> Folder
+        <button className="add-btn secondary" onClick={() => onCreateFolder('root')}>
+          <Plus size={15} /> Folder
         </button>
       </div>
-      <nav className="notes-tree">
-        {notes.root && renderNoteItem('root')}
-      </nav>
+
+      {starredNotes.length > 0 && (
+        <div className="sidebar-section">
+          <div className="sidebar-section-label">Starred</div>
+          {starredNotes.map((n) => (
+            <div
+              key={n.id}
+              className={`note-item ${selectedId === n.id ? 'selected' : ''}`}
+              style={{ paddingLeft: '8px' }}
+            >
+              <button className="toggle-btn"><span style={{ width: 14 }} /></button>
+              <button className="note-button" onClick={() => onSelectNote(n.id)}>
+                <Star size={14} className="note-icon star-icon" />
+                <span className="note-title">{n.title}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="sidebar-section">
+        <div className="sidebar-section-label">Library</div>
+        <nav className="notes-tree">
+          {notes.root && renderItem('root')}
+        </nav>
+      </div>
     </aside>
   );
 }
