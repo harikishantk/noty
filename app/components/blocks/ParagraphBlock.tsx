@@ -48,7 +48,6 @@ export default function ParagraphBlock({ block, onUpdate, onDelete, onSelectText
 
   const handleSlashSelect = (type: Block['type']) => {
     setShowSlashMenu(false);
-    onUpdate('');
     onBlockTypeChange(type);
   };
 

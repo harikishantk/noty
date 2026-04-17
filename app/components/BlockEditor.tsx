@@ -68,7 +68,7 @@ export default function BlockEditor({ note, onUpdateBlocks, isSaving }: BlockEdi
 
   const changeType = (id: string, newType: Block['type']) =>
     push(blocks.map((b) =>
-      b.id === id ? { ...b, type: newType, metadata: { ...b.metadata, headingLevel: newType.startsWith('heading_') ? (parseInt(newType.split('_')[1]) as 1 | 2 | 3) : undefined, calloutType: newType === 'callout' ? 'info' : undefined } } : b
+      b.id === id ? { ...b, content: '', type: newType, metadata: { ...b.metadata, headingLevel: newType.startsWith('heading_') ? (parseInt(newType.split('_')[1]) as 1 | 2 | 3) : undefined, calloutType: newType === 'callout' ? 'info' : undefined } } : b
     ));
 
   const updateMeta = (id: string, metadata: Block['metadata']) =>
