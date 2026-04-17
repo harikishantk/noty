@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Block } from '@/app/types/blocks';
 import ParagraphBlock from './ParagraphBlock';
 import CodeBlock from './CodeBlock';
@@ -20,9 +21,7 @@ interface BlockRendererProps {
   onSelectText: (startOffset: number, endOffset: number, selectedText: string) => void;
   onBlockTypeChange: (newType: Block['type']) => void;
   onMetadataUpdate: (metadata: Block['metadata']) => void;
-  isDragging: boolean;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragEnd: (e: React.DragEvent) => void;
+  isOverlay?: boolean;
 }
 
 export default function BlockRenderer({
@@ -34,22 +33,31 @@ export default function BlockRenderer({
   onSelectText,
   onBlockTypeChange,
   onMetadataUpdate,
-  isDragging,
-  onDragStart,
-  onDragEnd,
+  isOverlay = false,
 }: BlockRendererProps) {
-  const [hovered, setHovered] = useState(false);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: block.id,
+    disabled: isOverlay,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform) ?? undefined,
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
 
   return (
     <div
-      className={`block-container ${isDragging ? 'dragging' : ''} ${hovered ? 'hovered' : ''}`}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      ref={setNodeRef}
+      style={style}
+      className={`block-container ${isDragging ? 'dragging' : ''}`}
+      {...attributes}
     >
-      <div className="block-drag-handle" title="Drag to reorder">
+      <div
+        className="block-drag-handle"
+        title="Drag to reorder"
+        {...listeners}
+      >
         <GripVertical size={16} />
       </div>
 
@@ -96,7 +104,7 @@ export default function BlockRenderer({
         )}
 
         {block.type === 'divider' && (
-          <DividerBlock onDelete={onDelete} />
+          <DividerBlock onDelete={onDelete} isOverlay={isOverlay} />
         )}
 
         {(block.type === 'bullet_list' || block.type === 'numbered_list') && (

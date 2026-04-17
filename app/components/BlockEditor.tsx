@@ -1,6 +1,18 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Block, CommentThread as ICommentThread, NoteWithBlocks } from '@/app/types/blocks';
 import BlockRenderer from './blocks/BlockRenderer';
 import CommentPanel from './CommentPanel';
@@ -27,8 +39,13 @@ function makeBlock(type: Block['type'], content = ''): Block {
 
 export default function BlockEditor({ note, onUpdateBlocks, isSaving }: BlockEditorProps) {
   const [blocks, setBlocks] = useState<Block[]>(note.blocks?.length ? note.blocks : [makeBlock('paragraph')]);
-  const dragSourceIndex = useRef<number | null>(null);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeListIndexRef = useRef<number>(0);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+  );
 
   const push = useCallback((newBlocks: Block[]) => {
     setBlocks(newBlocks);
@@ -79,26 +96,23 @@ export default function BlockEditor({ note, onUpdateBlocks, isSaving }: BlockEdi
   const handleDeleteThread = (threadId: string) =>
     push(blocks.map((b) => ({ ...b, comments: b.comments.filter((t) => t.id !== threadId) })));
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    dragSourceIndex.current = index;
-    setDraggedId(blocks[index].id);
-    e.dataTransfer.effectAllowed = 'move';
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+    const idx = blocks.findIndex((b) => b.id === event.active.id);
+    activeListIndexRef.current = listCounters.get(blocks[idx]?.id) ?? idx + 1;
   };
 
-  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
-    e.preventDefault();
-    if (dragSourceIndex.current === null || dragSourceIndex.current === targetIndex) return;
-    const nb = [...blocks];
-    const [moved] = nb.splice(dragSourceIndex.current, 1);
-    nb.splice(targetIndex, 0, moved);
-    push(nb);
-    setDraggedId(null);
-    dragSourceIndex.current = null;
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    if (!over || active.id === over.id) return;
+    const oldIndex = blocks.findIndex((b) => b.id === active.id);
+    const newIndex = blocks.findIndex((b) => b.id === over.id);
+    push(arrayMove(blocks, oldIndex, newIndex));
   };
 
   const allThreads = blocks.reduce((acc: ICommentThread[], b) => [...acc, ...b.comments], []);
 
-  // Track list indices per block
   const listCounters = new Map<string, number>();
   let bulletCount = 0;
   let numberedCount = 0;
@@ -108,6 +122,8 @@ export default function BlockEditor({ note, onUpdateBlocks, isSaving }: BlockEdi
     else { bulletCount = 0; numberedCount = 0; }
   });
 
+  const activeBlock = activeId ? blocks.find((b) => b.id === activeId) : null;
+
   return (
     <div className="block-editor-container">
       <div className="blocks-area">
@@ -116,28 +132,46 @@ export default function BlockEditor({ note, onUpdateBlocks, isSaving }: BlockEdi
             <p>Start typing or press <kbd>/</kbd> to add blocks</p>
           </div>
         ) : (
-          blocks.map((block, index) => (
-            <div
-              key={block.id}
-              className="block-drop-zone"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleDrop(e, index)}
-            >
-              <BlockRenderer
-                block={block}
-                listIndex={listCounters.get(block.id) || index + 1}
-                onUpdate={(content) => updateBlock(block.id, content)}
-                onDelete={() => deleteBlock(block.id)}
-                onAddAfter={() => addBlock(index, block.type)}
-                onSelectText={(s, e, t) => handleSelectText(block.id, s, e, t)}
-                onBlockTypeChange={(type) => changeType(block.id, type)}
-                onMetadataUpdate={(meta) => updateMeta(block.id, meta)}
-                isDragging={draggedId === block.id}
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragEnd={() => { setDraggedId(null); dragSourceIndex.current = null; }}
-              />
-            </div>
-          ))
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+              {blocks.map((block, index) => (
+                <BlockRenderer
+                  key={block.id}
+                  block={block}
+                  listIndex={listCounters.get(block.id) ?? index + 1}
+                  onUpdate={(content) => updateBlock(block.id, content)}
+                  onDelete={() => deleteBlock(block.id)}
+                  onAddAfter={() => addBlock(index, block.type)}
+                  onSelectText={(s, e, t) => handleSelectText(block.id, s, e, t)}
+                  onBlockTypeChange={(type) => changeType(block.id, type)}
+                  onMetadataUpdate={(meta) => updateMeta(block.id, meta)}
+                />
+              ))}
+            </SortableContext>
+
+            <DragOverlay dropAnimation={{ duration: 150, easing: 'ease-out' }}>
+              {activeBlock ? (
+                <div style={{ transform: 'scale(1.02)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', borderRadius: 6 }}>
+                  <BlockRenderer
+                    block={activeBlock}
+                    listIndex={activeListIndexRef.current}
+                    onUpdate={() => {}}
+                    onDelete={() => {}}
+                    onAddAfter={() => {}}
+                    onSelectText={() => {}}
+                    onBlockTypeChange={() => {}}
+                    onMetadataUpdate={() => {}}
+                    isOverlay
+                  />
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
 
         <button className="add-block-btn" onClick={() => addBlock(blocks.length - 1)}>

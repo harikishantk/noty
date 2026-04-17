@@ -473,8 +473,6 @@ kbd {
 .blocks-area::-webkit-scrollbar-track { background: transparent; }
 .blocks-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-.block-drop-zone { position: relative; }
-
 .block-container {
   display: flex;
   align-items: flex-start;
@@ -487,7 +485,7 @@ kbd {
 }
 
 .block-container.dragging { opacity: 0.4; }
-.block-container.hovered .block-drag-handle { opacity: 1; }
+.block-container:hover .block-drag-handle { opacity: 1; }
 
 .block-drag-handle {
   position: absolute;
@@ -500,12 +498,13 @@ kbd {
   justify-content: center;
   color: var(--text-3);
   cursor: grab;
-  opacity: 0;
+  opacity: 0.3;
   transition: opacity var(--t);
   border-radius: 4px;
+  touch-action: none;
 }
 
-.block-drag-handle:hover { background: var(--bg-3); color: var(--text-2); }
+.block-drag-handle:hover { background: var(--bg-3); color: var(--text-2); opacity: 1; }
 .block-drag-handle:active { cursor: grabbing; }
 
 .block-content { flex: 1; min-width: 0; }
